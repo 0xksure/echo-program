@@ -3,7 +3,9 @@
 use borsh::{BorshDeserialize, BorshSerialize};
 use std::mem;
 
-use solana_program::{instruction, msg, pubkey::Pubkey, system_instruction, system_program};
+use solana_program::{
+    config::program, instruction, msg, pubkey::Pubkey, system_instruction, system_program,
+};
 use solana_program_test::ProgramTest;
 use xbooth::instruction::EchoInstruction;
 use {
@@ -78,11 +80,80 @@ async fn test_echo() {
     );
 
     banks_client.process_transaction(tx2).await.unwrap();
+}
 
-    // let account = banks_client
-    //     .get_account(echo_account.pubkey())
-    //     .await
-    //     .unwrap()
-    //     .expect("could not get account");
-    // println!("data from account: {:?} ", account.data);
+#[tokio::test]
+async fn test_initialize_authorize_echo() {
+    let program_id = Pubkey::new_unique();
+    let mut program_test = ProgramTest::default();
+    program_test.add_program("xbooth", program_id, None);
+    let auth = Keypair::new();
+    program_test.add_account(
+        auth.pubkey(),
+        solana_sdk::account::Account {
+            lamports: 100_000_000_000,
+            data: vec![],
+            owner: system_program::id(),
+            ..solana_sdk::account::Account::default()
+        },
+    );
+    let (mut banks_client, payer, recent_blockhash) = program_test.start().await;
+
+    let authority = instruction::AccountMeta {
+        pubkey: auth.pubkey(),
+        is_signer: true,
+        is_writable: false,
+    };
+
+    let buffer_seed = 10_u64.to_le_bytes();
+
+    let (authorized_buffer_key, bump) = Pubkey::find_program_address(
+        &[b"authority", auth.pubkey().as_ref(), &buffer_seed],
+        &program_id,
+    );
+
+    let authority_buffer = instruction::AccountMeta {
+        pubkey: authorized_buffer_key,
+        is_signer: false,
+        is_writable: true,
+    };
+
+    let system_program_account = instruction::AccountMeta {
+        pubkey: system_program::id(),
+        is_signer: false,
+        is_writable: false,
+    };
+
+    let accounts = vec![authority_buffer, authority, system_program_account];
+
+    let mut data_input = vec![1; mem::size_of::<u8>()];
+    let mut buffer_seed_i = vec![0; mem::size_of::<u64>()];
+    buffer_seed_i[0] = 10;
+    let mut buffer_size_i = vec![0; mem::size_of::<u64>()];
+    data_input.append(&mut buffer_seed_i);
+    data_input.append(&mut buffer_size_i);
+    let mut instruction_data: Vec<u8> = Vec::new();
+    let init_auth_echo_data = EchoInstruction::InitializeAuthorizedEcho {
+        buffer_seed: 10,
+        buffer_size: 100,
+    };
+
+    init_auth_echo_data
+        .serialize(&mut instruction_data)
+        .unwrap();
+    println!("data_input: {:?}", data_input);
+    println!("instruction data: {:?}", instruction_data);
+    let initialize_authorized_echo_ix = instruction::Instruction {
+        program_id: program_id,
+        data: instruction_data,
+        accounts,
+    };
+
+    let tx = solana_sdk::transaction::Transaction::new_signed_with_payer(
+        &[initialize_authorized_echo_ix],
+        Some(&auth.pubkey()),
+        &[&auth],
+        recent_blockhash,
+    );
+    banks_client.process_transaction(tx).await.unwrap();
 }

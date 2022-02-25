@@ -1,5 +1,3 @@
-use std::borrow::BorrowMut;
-
 use borsh::{BorshDeserialize, BorshSerialize};
 use solana_program::{
     account_info::{next_account_info, AccountInfo},
@@ -52,18 +50,21 @@ impl Processor {
                 buffer_size,
             } => {
                 msg!("Initialize Authorized echo");
+                if buffer_size <= AUTH_BUFFER_HEADER_SIZE {
+                    msg!(
+                        "Invalid buffer length {}, must be greater than header size {}",
+                        buffer_size,
+                        AUTH_BUFFER_HEADER_SIZE
+                    );
+                    return Err(ProgramError::InvalidArgument);
+                }
                 let account_iter = &mut accounts.iter();
                 let authorized_buffer = next_account_info(account_iter)?;
                 let authority = next_account_info(account_iter)?;
                 let system_program = next_account_info(account_iter)?;
 
-                if authorized_buffer.owner != authority.key {
-                    msg!("authorized buffer owner is not the same as authority key");
-                    return Err(ProgramError::IllegalOwner);
-                }
-
-                let auth_buffer_data = &mut (*authorized_buffer.data).borrow_mut();
                 let buffer_seed_b = buffer_seed.to_le_bytes();
+
                 let (pubkey, bump_seed) = Pubkey::find_program_address(
                     &[b"authority", authority.key.as_ref(), &buffer_seed_b],
                     &_program_id,
@@ -97,9 +98,7 @@ impl Processor {
                         &[bump_seed],
                     ]],
                 )?;
-
                 let buffer = &mut (*authorized_buffer.data).borrow_mut();
-
                 let buffer_header = AuthorizedBufferHeader {
                     bump_seed,
                     buffer_seed,
