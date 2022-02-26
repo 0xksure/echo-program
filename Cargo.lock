@@ -3164,6 +3164,7 @@ name = "xbooth"
 version = "0.1.0"
 dependencies = [
  "borsh",
+ "byteorder",
  "solana-program",
  "solana-program-test",
  "solana-sdk",

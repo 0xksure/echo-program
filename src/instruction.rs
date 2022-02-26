@@ -24,4 +24,17 @@ pub enum EchoInstruction {
         buffer_seed: u64,
         buffer_size: usize,
     },
+
+    /// Authorized echo
+    ///
+    /// input accounts:
+    /// 1. authorized_buffer:
+    ///     -  signer: false
+    ///     - writable: true
+    ///
+    /// 2. authority:
+    ///     - signer: true
+    ///     - writable: false
+    ///
+    AuthorizedEcho { data: Vec<u8> },
 }

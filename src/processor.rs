@@ -1,3 +1,5 @@
+use std::borrow::BorrowMut;
+
 use borsh::{BorshDeserialize, BorshSerialize};
 use solana_program::{
     account_info::{next_account_info, AccountInfo},
@@ -109,6 +111,41 @@ impl Processor {
                 msg!("Authorized buffer len: {}", buffer_size);
                 msg!("Bump seed: {}", bump_seed);
                 msg!("Buffer seed: {}", buffer_seed);
+            }
+            EchoInstruction::AuthorizedEcho { data } => {
+                msg!("Authorized echo");
+                let accounts_iter = &mut accounts.iter();
+                let authorized_buffer = next_account_info(accounts_iter)?;
+                let authority = next_account_info(accounts_iter)?;
+                let buffer = &mut (*authorized_buffer.data).try_borrow_mut().unwrap();
+                let buffer_header =
+                    AuthorizedBufferHeader::try_from_slice(&buffer[..AUTH_BUFFER_HEADER_SIZE])
+                        .unwrap();
+
+                let pda = Pubkey::create_program_address(
+                    &[
+                        b"authority",
+                        authority.key.as_ref(),
+                        &buffer_header.buffer_seed.to_le_bytes(),
+                        &[buffer_header.bump_seed],
+                    ],
+                    _program_id,
+                )
+                .unwrap();
+
+                if pda != *authorized_buffer.key {
+                    msg!("authorized buffer is not correct pda");
+                    return Err(ProgramError::IllegalOwner);
+                }
+
+                let buffer_data = &mut buffer[AUTH_BUFFER_HEADER_SIZE..];
+
+                for index in 0..buffer_data.len() {
+                    buffer_data[index] = match index < data.len() {
+                        true => data[index],
+                        false => 0,
+                    };
+                }
             }
         }
         Ok(())
