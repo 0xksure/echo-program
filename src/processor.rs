@@ -1,5 +1,3 @@
-use std::borrow::BorrowMut;
-
 use borsh::{BorshDeserialize, BorshSerialize};
 use solana_program::{
     account_info::{next_account_info, AccountInfo},
@@ -7,14 +5,16 @@ use solana_program::{
     msg,
     program::invoke_signed,
     program_error::ProgramError,
+    program_pack::Pack,
     pubkey::Pubkey,
     rent::Rent,
     system_instruction,
     sysvar::Sysvar,
 };
+use spl_token::state::Mint;
 
 use crate::instruction::EchoInstruction;
-use crate::state::{AuthorizedBufferHeader, AUTH_BUFFER_HEADER_SIZE};
+use crate::state::{AuthorizedBufferHeader, VendingMachineBufferHeader, AUTH_BUFFER_HEADER_SIZE};
 pub struct Processor {}
 
 impl Processor {
@@ -146,6 +146,76 @@ impl Processor {
                         false => 0,
                     };
                 }
+            }
+            EchoInstruction::InitializeVendingMachine { price, buffer_size } => {
+                msg!("Initialize vending machine");
+                let accounts_iter = &mut accounts.iter();
+                let vending_machine_buffer = next_account_info(accounts_iter)?;
+                let vending_machine_mint = next_account_info(accounts_iter)?;
+                let payer = next_account_info(accounts_iter)?;
+                let system_program = next_account_info(accounts_iter)?;
+
+                msg!("price: {} , buffer_size: {}", price, buffer_size);
+
+                let _mint =
+                    Mint::unpack_unchecked(&vending_machine_mint.data.borrow()).map_err(|e| {
+                        msg!("invalid account");
+                        return e;
+                    });
+
+                let (pda, bump) = Pubkey::find_program_address(
+                    &[
+                        b"vending_machine",
+                        vending_machine_mint.key.as_ref(),
+                        &price.to_le_bytes(),
+                    ],
+                    _program_id,
+                );
+
+                if pda != *vending_machine_buffer.key {
+                    msg!("vending machine buffer pubkey is not equal to expected pda");
+                    return Err(ProgramError::InvalidAccountData);
+                }
+
+                let create_vending_machine_buffer = system_instruction::create_account(
+                    payer.key,
+                    &pda,
+                    Rent::get()?.minimum_balance(buffer_size),
+                    buffer_size as u64,
+                    _program_id,
+                );
+
+                invoke_signed(
+                    &create_vending_machine_buffer,
+                    &[
+                        payer.clone(),
+                        system_program.clone(),
+                        vending_machine_buffer.clone(),
+                    ],
+                    &[&[
+                        b"vending_machine",
+                        vending_machine_mint.key.as_ref(),
+                        &price.to_le_bytes(),
+                        &[bump],
+                    ]],
+                )?;
+
+                let buffer = &mut (*vending_machine_buffer.data).borrow_mut();
+                let vending_machine_buffer_header = VendingMachineBufferHeader {
+                    bump_seed: bump,
+                    price: price,
+                };
+
+                buffer[0..AUTH_BUFFER_HEADER_SIZE]
+                    .copy_from_slice(&vending_machine_buffer_header.try_to_vec().unwrap());
+
+                msg!("Vending machine buffer len: {}", buffer_size);
+                msg!("Bump seed: {}", bump);
+                msg!("Buffer price: {}", price);
+            }
+            _ => {
+                msg!("invalid instruction");
+                return Err(ProgramError::InvalidInstructionData);
             }
         }
         Ok(())

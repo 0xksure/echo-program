@@ -11,7 +11,7 @@ test-bpf = []
 [dependencies]
 solana-program = "1.9.8"
 borsh = "0.9.3"
-byteorder = "1.4.3"
+spl-token = {version = "3.3.0", features = ["no-entrypoint"]}
 
 
 [dev-dependencies]

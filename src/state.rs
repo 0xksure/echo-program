@@ -12,4 +12,10 @@ pub struct AuthorizedBufferHeader {
     pub buffer_seed: u64,
 }
 
+#[derive(Clone, Debug, BorshDeserialize, BorshSerialize)]
+pub struct VendingMachineBufferHeader {
+    pub bump_seed: u8,
+    pub price: u64,
+}
+
 pub const AUTH_BUFFER_HEADER_SIZE: usize = size_of::<u8>() + size_of::<u64>();

@@ -24,7 +24,6 @@ pub enum EchoInstruction {
         buffer_seed: u64,
         buffer_size: usize,
     },
-
     /// Authorized echo
     ///
     /// input accounts:
@@ -37,4 +36,21 @@ pub enum EchoInstruction {
     ///     - writable: false
     ///
     AuthorizedEcho { data: Vec<u8> },
+    /// initialize vending machine mint
+    /// only holders of mint can access buffer
+    ///
+    /// input accounts:
+    /// 1. vending_machine_buffer:pda of echo program
+    ///     - signer: false
+    ///     - writable: true
+    /// 2. vending_machine_mint: token mint
+    ///     - signer: false
+    ///     - writable: true
+    /// 3. payer:
+    ///     - signer: true,
+    ///     - writable: false
+    /// 4. system_program
+    ///     - signer: false
+    ///     - writable: fal
+    InitializeVendingMachine { price: u64, buffer_size: usize },
 }
